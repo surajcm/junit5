@@ -230,6 +230,25 @@ class ExceptionHandlingTests extends AbstractJupiterTestEngineTests {
 			event(engine(), finishedSuccessfully()));
 	}
 
+	@Test
+	void failureInAfterAllTakesPrecedenceOverTestAbortedExceptionInBeforeAll() throws NoSuchMethodException {
+		Method method = FailureTestCase.class.getDeclaredMethod("succeedingTest");
+		LauncherDiscoveryRequest request = request().selectors(selectMethod(FailureTestCase.class, method)).build();
+
+		FailureTestCase.exceptionToThrowInBeforeAll = Optional.of(new TestAbortedException("aborted"));
+		FailureTestCase.exceptionToThrowInAfterAll = Optional.of(new IOException("checked"));
+
+		ExecutionEventRecorder eventRecorder = executeTests(request);
+
+		assertRecordedExecutionEventsContainsExactly(eventRecorder.getExecutionEvents(), //
+			event(engine(), started()), //
+			event(container(FailureTestCase.class), started()), //
+			event(container(FailureTestCase.class),
+				finishedWithFailure(allOf(isA(IOException.class), message("checked"),
+					suppressed(0, allOf(isA(TestAbortedException.class), message("aborted")))))), //
+			event(engine(), finishedSuccessfully()));
+	}
+
 	@AfterEach
 	void cleanUpExceptions() {
 		FailureTestCase.exceptionToThrowInBeforeAll = Optional.empty();
